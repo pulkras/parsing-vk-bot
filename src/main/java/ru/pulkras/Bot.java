@@ -20,24 +20,26 @@ import java.io.FileInputStream;
 
 public class Bot {
 
+    static VkApiClient vkClient;
+
+    static GroupActor actor;
     static int vkGroupId;
     static String vkToken;
 
-    static void main(String[] args) throws ClientException, InterruptedException, ApiException {
+    static Random random = new Random();
+
+    public static void main(String[] args) throws ClientException, InterruptedException, ApiException {
 
 
         TransportClient transportClient = new HttpTransportClient();
-        VkApiClient vkClient = new VkApiClient(transportClient); // interface which work with vk api by requests
-        Random random = new Random();
+        vkClient = new VkApiClient(transportClient); // interface which work with vk api by requests
+
 
         getVkKeys();
-        GroupActor actor = new GroupActor(vkGroupId, vkToken);
+        actor = new GroupActor(vkGroupId, vkToken);
 
-        Integer identification = vkClient.messages()
-                .getLongPollServer(actor)
-                .execute()
-                .getTs();
-        
+        botAnswers();
+
     }
 
     public static void getVkKeys() {
@@ -47,12 +49,71 @@ public class Bot {
 
             property.load(fileInputStream);
 
-            vkGroupId = Integer.parseInt(property.getProperty("vk.key"));
+            vkGroupId = Integer.parseInt(property.getProperty("vk.groupId"));
             vkToken = property.getProperty("vk.token");
 
         } catch (IOException e) {
-            System.err.println("ОШИБКА: Файл свойств отсуствует!");
+            System.err.println("Error. Such file doesn't exist!");
         }
+    }
+
+    public static void botAnswers() throws ClientException, ApiException, InterruptedException {
+        Integer identification = vkClient.messages()
+                .getLongPollServer(actor)
+                .execute()
+                .getTs();
+        while(true) {
+            MessagesGetLongPollHistoryQuery historyQuery = vkClient.messages()
+                    .getLongPollHistory(actor)
+                    .ts(identification);
+            List<Message> messages = historyQuery
+                    .execute()
+                    .getMessages()
+                    .getItems();
+            if (!messages.isEmpty()) {
+                commands(messages);
+            }
+            identification = vkClient.messages()
+                    .getLongPollServer(actor)
+                    .execute()
+                    .getTs();
+            Thread.sleep(500);
+        }
+    }
+
+    public static void commands(List<Message> messages) {
+        messages.forEach(message -> {
+            System.out.println(message.toString());
+            String userMessage = message.getText();
+            try {
+                if(userMessage.equals("Sap") || userMessage.equals("Hello") || userMessage.equals("Hi")) {
+                    vkClient.messages()
+                            .send(actor)
+                            .message("Hello, my friend:)")
+                            .userId(message.getFromId())
+                            .randomId(random.nextInt(10000))
+                            .execute();
+                }
+                else if(userMessage.equals("how are you") || userMessage.equals("how are you doing") || userMessage.equals("whats up")) {
+                    vkClient.messages()
+                            .send(actor)
+                            .message("I'm alright!")
+                            .userId(message.getFromId())
+                            .randomId(random.nextInt(10000))
+                            .execute();
+                }
+                else {
+                    vkClient.messages()
+                            .send(actor)
+                            .message("I don't understand you now but my developers extend my horizons")
+                            .userId(message.getFromId())
+                            .randomId(random.nextInt(10000))
+                            .execute();
+                }
+            } catch (ApiException | ClientException e) {
+                e.printStackTrace();
+            }
+        });
     }
 
 }
